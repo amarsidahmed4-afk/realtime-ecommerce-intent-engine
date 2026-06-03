@@ -2,3 +2,6 @@
 jupyterlab
 ipykernel
 ipywidgets
+optuna
+shap
+joblib

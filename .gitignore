@@ -1,3 +1,6 @@
 data/
 .venv/
 .ipynb_checkpoints/
+__pycache__/
+*.pyc
+notebooks/*_files/
