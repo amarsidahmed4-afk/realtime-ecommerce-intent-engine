@@ -1,28 +1,25 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import pandas as pd
 import joblib
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning)
+import pandas as pd
+from fastapi import FastAPI
+from pydantic import BaseModel
 
-# 1. Initialize the Web App
-app = FastAPI(
-    title="Marketing Conversion Engine API",
-    description="Live scoring API for predicting online shopper conversion.",
-    version="1.0"
-)
+# 1. Initialize the API
+app = FastAPI(title="Conversion Prediction API - Dual Engine")
 
-# 2. Load the Engine (Happens once when the server boots)
-try:
-    print("Loading ML Pipeline...")
-    model = joblib.load('models/conversion_engine_v1.joblib')
-    print("Pipeline loaded successfully!")
-except Exception as e:
-    print(f"Error loading model: {e}")
-
-# 3. Define the Data Schema (The "Bouncer")
-# We set logical default values so we don't have to type all 17 fields every time we test
-class VisitorData(BaseModel):
+# 2. Define the Unified Pydantic Schema
+# We give the behavioral metrics a default value of 0.0. 
+# This way, the frontend only has to send the Day-One features at millisecond zero!
+class ShopperPayload(BaseModel):
+    # Day-One Features (The Greeter Needs These)
+    VisitorType: str
+    TrafficType: int
+    Browser: int
+    OperatingSystems: int
+    Region: int
+    Month: str
+    Weekend: bool
+    
+    # Behavioral Features (The Closer Needs These) - Defaulting to Zero
     Administrative: int = 0
     Administrative_Duration: float = 0.0
     Informational: int = 0
@@ -33,31 +30,61 @@ class VisitorData(BaseModel):
     ExitRates: float = 0.0
     PageValues: float = 0.0
     SpecialDay: float = 0.0
-    Month: str = "May"
-    OperatingSystems: int = 1
-    Browser: int = 1
-    Region: int = 1
-    TrafficType: int = 1
-    VisitorType: str = "Returning_Visitor"
-    Weekend: bool = False
 
-# 4. Define the API Endpoint
-@app.post("/predict")
-def predict_conversion(visitor: VisitorData):
+# 3. Global variables for our two brains
+greeter_model = None
+closer_model = None
+
+# 4. Load BOTH engines at startup
+@app.on_event("startup")
+def load_models():
+    global greeter_model, closer_model
     try:
-        # Convert the incoming JSON into a pandas DataFrame row
-        visitor_dict = visitor.model_dump()
-        input_df = pd.DataFrame([visitor_dict])
+        print("Loading The Greeter (Top of Funnel)...")
+        greeter_model = joblib.load("models/greeter_engine_v1.joblib")
         
-        # Run the full preprocessing & prediction pipeline
-        prob = model.predict_proba(input_df)[:, 1][0]
+        print("Loading The Closer (Bottom of Funnel)...")
+        closer_model = joblib.load("models/conversion_engine_v1.joblib")
         
-        # Return the clean JSON response
-        return {
-            "status": "success",
-            "conversion_probability": round(float(prob), 4),
-            "high_intent_flag": bool(prob > 0.70) # Using our custom threshold!
-        }
-        
+        print("Both ML Engines loaded successfully!")
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"CRITICAL ERROR loading models: {e}")
+
+# 5. The Routing Endpoint
+@app.post("/predict")
+def predict_conversion(payload: ShopperPayload):
+    # Convert incoming JSON into a single-row Pandas DataFrame
+    input_dict = payload.model_dump()
+    input_df = pd.DataFrame([input_dict])
+    
+    # --- THE ROUTER LOGIC ---
+    # If the user has viewed ANY pages, they are no longer at Millisecond Zero.
+    has_browsed = (
+        payload.ProductRelated > 0 or 
+        payload.Administrative > 0 or 
+        payload.Informational > 0
+    )
+    
+    if not has_browsed:
+        # Route to The Greeter
+        engine_used = "Greeter Engine (Cold Start)"
+        # The Greeter pipeline expects only its specific 7 features
+        greeter_features = ['VisitorType', 'TrafficType', 'Browser', 'OperatingSystems', 'Region', 'Month', 'Weekend']
+        model_input = input_df[greeter_features]
+        probability = greeter_model.predict_proba(model_input)[0][1]
+        
+    else:
+        # Route to The Closer
+        engine_used = "Closer Engine (Engaged User)"
+        # The Closer pipeline expects the full behavioral dataset
+        probability = closer_model.predict_proba(input_df)[0][1]
+        
+    # Convert math to business logic
+    is_high_intent = bool(probability > 0.5)
+    
+    # Return the prediction AND the diagnostic router info
+    return {
+        "engine_used": engine_used,
+        "conversion_probability": round(probability, 4),
+        "high_intent_flag": is_high_intent
+    }
