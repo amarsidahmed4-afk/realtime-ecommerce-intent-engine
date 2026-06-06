@@ -1,15 +1,15 @@
-# 🚀 Mobile Conversion Intent API (Dual-Engine)
+# Mobile Conversion Intent API (Dual-Engine)
 
 A context-aware machine learning web service built to solve the e-commerce "Cold Start" problem. This API intercepts live frontend traffic, analyzes the behavioral context of the user, and dynamically routes the data to the optimal machine learning engine to predict purchase intent.
 
-## 🧠 The Architecture
+## The Architecture
 
 This system operates a dynamic routing matrix (The Traffic Cop) using two frozen `.joblib` pipelines:
 
 * **Engine A: The Greeter (Top of Funnel):** Triggers at "Millisecond Zero". When a user has zero page views, this engine relies exclusively on Day-One categorical context (Browser, Traffic Source, OS) using Target Encoding to predict base conversion probability.
 * **Engine B: The Closer (Bottom of Funnel):** Takes over the moment a user begins generating behavioral data (clicks, page durations). It leverages a heavy-duty LightGBM pipeline to evaluate deep session engagement.
 
-## 📂 Repository Structure
+## Repository Structure
 
 ```text
 ├── data/raw/             # Immutable truth (Ignored in Docker build)
@@ -24,7 +24,7 @@ This system operates a dynamic routing matrix (The Traffic Cop) using two frozen
 └── requirements.txt      # Deterministic production dependencies
 ```
 
-## 🛠️ Local Development (Lab Environment)
+## Local Development (Lab Environment)
 
 To boot the API locally via Uvicorn for QA testing:
 
@@ -35,7 +35,7 @@ To boot the API locally via Uvicorn for QA testing:
    ```
 3. Access the interactive Swagger UI at: `http://127.0.0.1:8000/docs`
 
-## 📦 Docker Deployment (Live Environment)
+## Docker Deployment (Live Environment)
 
 This API is packaged into a highly optimized, production-ready container. 
 
@@ -48,7 +48,7 @@ This API is packaged into a highly optimized, production-ready container.
    docker run -p 8000:8000 conversion-api:v2
    ```
 
-## 🛜 API Schema & Routing Example
+##  API Schema & Routing Example
 
 The `/predict` endpoint expects a unified JSON payload. Behavioral metrics default to `0` or `0.0` to minimize frontend payload size at initial landing.
 
