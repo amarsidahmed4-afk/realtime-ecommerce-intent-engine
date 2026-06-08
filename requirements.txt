@@ -7,3 +7,4 @@ fastapi
 uvicorn
 pydantic
 category_encoders
+google-cloud-bigquery
