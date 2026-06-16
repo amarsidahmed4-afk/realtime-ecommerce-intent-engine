@@ -15,3 +15,5 @@ htmlcov
 data/
 notebooks/
 .github
+*.json
+gha-creds-*.json

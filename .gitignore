@@ -1,10 +1,15 @@
-data/
+# Environments
 .venv/
-.ipynb_checkpoints/
-__pycache__/
-*.pyc
-notebooks/*_files/
-__pycache__/
-*.pyc
-notebooks/*_files/
+venv/
+
+# Secrets & Configs
+*.env
 *.json
+gha-creds-*.json
+
+# Cache & Data
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+data/
+notebooks/*_files/
