@@ -1,0 +1,96 @@
+# Real-Time Intent Engine: GTM Integration Guide
+
+## Overview
+This document outlines the standard integration protocol to connect your e-commerce storefront to the Real-Time Intent Engine via Google Tag Manager (GTM). 
+
+By exposing a standardized JavaScript `dataLayer` object, your frontend architecture can securely stream user session telemetry to our machine learning API. The engine will return a real-time prediction (within milliseconds) indicating whether the current user exhibits high-intent purchasing behavior, allowing you to trigger targeted marketing interventions (e.g., dynamic discounts, chat widgets, or specific ad retargeting).
+
+---
+
+## Step 1: Expose the DataLayer Variable
+Your frontend development team must push the following structured JSON payload to the GTM `dataLayer` on the specific pages where you want the prediction engine to evaluate the user (e.g., `checkout_initiated`, `cart_viewed`, or a specific time-on-site trigger).
+
+Please ensure the data types exactly match the schema below.
+
+### Example JavaScript Push
+```javascript
+window.dataLayer = window.dataLayer || [];
+window.dataLayer.push({
+  'event': 'evaluate_user_intent',
+  'intent_payload': {
+    "VisitorType": "Returning_Visitor", // String: 'Returning_Visitor', 'New_Visitor', or 'Other'
+    "TrafficType": 2,                   // Integer: Traffic source category ID
+    "Browser": "Chrome",                // String: User's active browser
+    "OperatingSystems": "Windows",      // String: User's OS
+    "Region": "Europe",                 // String: Geographic region
+    "Month": "Jun",                     // String: 3-letter month abbreviation
+    "Weekend": true,                    // Boolean: true if weekend, false otherwise
+    "Administrative": 3,                // Integer: Count of admin pages visited
+    "Administrative_Duration": 120.5,   // Float: Time spent on admin pages (seconds)
+    "Informational": 0,                 // Integer: Count of informational pages visited
+    "Informational_Duration": 0.0,      // Float: Time spent on informational pages
+    "ProductRelated": 25,               // Integer: Count of product pages visited
+    "ProductRelated_Duration": 850.2,   // Float: Time spent on product pages
+    "BounceRates": 0.0,                 // Float: Session bounce rate
+    "ExitRates": 0.005,                 // Float: Session exit rate
+    "PageValues": 65.8,                 // Float: Average page value visited
+    "SpecialDay": 0.0                   // Float: Proximity to a special holiday (0.0 to 1.0)
+  }
+});
+```
+
+---
+
+## Step 2: Configure GTM Variables
+Inside your Google Tag Manager workspace, create a new **Data Layer Variable** to capture the payload.
+
+1. **Variable Name:** `dlv - intent_payload`
+2. **Data Layer Variable Name:** `intent_payload`
+3. **Data Layer Version:** Version 2
+
+---
+
+## Step 3: Set Up the Webhook Tag
+Create a **Custom HTML Tag** in GTM that fires on the `evaluate_user_intent` custom event. This script will send the payload securely to the predictive engine.
+
+*(Note: Replace `[YOUR_CLOUD_RUN_URL]` with the dedicated API endpoint provisioned for your environment).*
+
+```html
+<script>
+  (function() {
+    var payload = {{dlv - intent_payload}};
+    var apiUrl = "[YOUR_CLOUD_RUN_URL]/predict";
+
+    fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+      // The engine returns a boolean flag indicating high purchasing intent
+      if(data.high_intent_flag === true) {
+        
+        // Push the result back into GTM to trigger marketing interventions
+        window.dataLayer.push({
+          'event': 'high_intent_user_identified',
+          'engine_used': data.engine_used
+        });
+      }
+    })
+    .catch(error => console.error('Intent Engine Connection Error:', error));
+  })();
+</script>
+```
+
+---
+
+## Step 4: Triggering the Business Logic
+Once the webhook successfully identifies a highly profitable session, it pushes the `high_intent_user_identified` event back into your dataLayer. 
+
+You can use this custom event trigger in GTM to fire your specific conversion tools, such as:
+* Firing a high-value Facebook/Google Ads Retargeting Pixel.
+* Popping a limited-time 10% discount modal to secure the checkout.
+* Activating a live customer support chat widget to assist the buyer.
