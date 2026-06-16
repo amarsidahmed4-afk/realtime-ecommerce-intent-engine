@@ -7,3 +7,4 @@ notebooks/*_files/
 __pycache__/
 *.pyc
 notebooks/*_files/
+*.json
