@@ -11,7 +11,7 @@ app = FastAPI(title="Realtime Ecommerce Intent Engine")
 # --- BIGQUERY CONFIGURATION ---
 # These will be read from environment variables in your Cloud Run setup
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "gtm-m4299zzd-nti4m")
-DATASET_ID = os.getenv("BQ_DATASET_ID", "ecommerce_telemetry")
+DATASET_ID = os.getenv("BQ_DATASET_ID", "ml_logs")
 TABLE_ID = os.getenv("BQ_TABLE_ID", "intent_predictions_log")
 TABLE_REF = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}"
 
@@ -61,14 +61,19 @@ def log_to_bigquery(row_data: dict):
 @app.post("/predict")
 async def predict_intent(data: CustomerJourneyInput, background_tasks: BackgroundTasks):
     
-    # --- FIX: Convert the incoming Pydantic schema completely to a 1-row DataFrame ---
-    # This ensures all categorical and numerical features exist with exact column names
+    # --- DATA TRANSLATION LAYER ---
+    # The frontend sends English strings, but the UCI dataset trained the 
+    # model on anonymized integers. We intercept and translate them here.
+    browser_map = {"Chrome": 2, "Safari": 1, "Firefox": 3, "Edge": 4}
+    os_map = {"Windows": 1, "Mac": 2, "Linux": 3, "iOS": 4, "Android": 8}
+    region_map = {"Europe": 1, "North America": 2, "Asia": 3, "South America": 4}
+
     input_data = {
         "VisitorType": data.VisitorType,
         "TrafficType": data.TrafficType,
-        "Browser": data.Browser,
-        "OperatingSystems": data.OperatingSystems,
-        "Region": data.Region,
+        "Browser": browser_map.get(data.Browser, 2),  # Default to 2 if unknown
+        "OperatingSystems": os_map.get(data.OperatingSystems, 1),
+        "Region": region_map.get(data.Region, 1),
         "Month": data.Month,
         "Weekend": data.Weekend,
         "Administrative": data.Administrative,
@@ -86,11 +91,16 @@ async def predict_intent(data: CustomerJourneyInput, background_tasks: Backgroun
     input_df = pd.DataFrame([input_data])
     
     # --- DYNAMIC ROUTING MATRIX ---
-    # The rest of your logic remains exactly the same!
     if data.ProductRelated == 0:
-        raw_probability = float(greeter_model.predict_proba(input_df)[0][1])
+        # We explicitly slice only the 7 top-of-funnel features the Greeter was trained on
+        # to prevent a Scikit-Learn Schema Mismatch crash.
+        greeter_features = ['VisitorType', 'TrafficType', 'Browser', 'OperatingSystems', 'Region', 'Month', 'Weekend']
+        greeter_df = input_df[greeter_features]
+        
+        raw_probability = float(greeter_model.predict_proba(greeter_df)[0][1])
         engine_tag = "Greeter Engine"
     else:
+        # The Closer Engine expects the full 17-feature dataframe
         raw_probability = float(closer_model.predict_proba(input_df)[0][1])
         engine_tag = "Closer Engine"
         
@@ -101,7 +111,7 @@ async def predict_intent(data: CustomerJourneyInput, background_tasks: Backgroun
     telemetry_log = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "visitor_type": data.VisitorType,
-        "browser": data.Browser,
+        "browser": data.Browser, # We log the actual string for business readability
         "operating_system": data.OperatingSystems,
         "product_related_pages": data.ProductRelated,
         "page_values": data.PageValues,
