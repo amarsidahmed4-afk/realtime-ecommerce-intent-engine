@@ -4,24 +4,40 @@ import pandas as pd
 from datetime import datetime, timezone
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from pydantic import BaseModel
-from google.cloud import bigquery
+from google.cloud import bigquery, storage  # <-- Added storage import
 
 app = FastAPI(title="Realtime Ecommerce Intent Engine")
 
-# --- BIGQUERY CONFIGURATION ---
+# --- GOOGLE CLOUD CONFIGURATION ---
 # These will be read from environment variables in your Cloud Run setup
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "gtm-m4299zzd-nti4m")
 DATASET_ID = os.getenv("BQ_DATASET_ID", "ml_logs")
 TABLE_ID = os.getenv("BQ_TABLE_ID", "intent_predictions_log")
 TABLE_REF = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}"
+BUCKET_NAME = f"intent-engine-models-{PROJECT_ID}" # <-- Your new globally unique bucket
 
-# Initialize the BQ client once at startup to reuse connection pools
+# Initialize the GCP clients once at startup to reuse connection pools
 bq_client = bigquery.Client(project=PROJECT_ID)
+storage_client = storage.Client(project=PROJECT_ID)
+
+# --- DYNAMIC MODEL DECOUPLING (GCS) ---
+def download_model_from_gcs(blob_name, destination_file_name):
+    """Downloads a blob from the bucket and loads it into RAM."""
+    print(f"Downloading {blob_name} from Cloud Storage...")
+    bucket = storage_client.bucket(BUCKET_NAME)
+    blob = bucket.blob(blob_name)
+    
+    # Cloud Run instances have a writable /tmp/ directory in memory
+    blob.download_to_filename(destination_file_name)
+    return joblib.load(destination_file_name)
 
 # --- COLD BOOT MODEL LOADING ---
-closer_model = joblib.load("models/conversion_engine_v1.joblib")
-greeter_model = joblib.load("models/greeter_engine_v1.joblib")
-OPTIMAL_THRESHOLD = 0.70
+print("Initializing Realtime Intent Engine...")
+closer_model = download_model_from_gcs("conversion_engine_v1.joblib", "/tmp/conversion_engine_v1.joblib")
+greeter_model = download_model_from_gcs("greeter_engine_v1.joblib", "/tmp/greeter_engine_v1.joblib")
+print("✅ Models successfully loaded from Google Cloud Storage into RAM.")
+OPTIMAL_THRESHOLD = 0.6010 
+
 
 class CustomerJourneyInput(BaseModel):
     VisitorType: str
@@ -32,15 +48,15 @@ class CustomerJourneyInput(BaseModel):
     Month: str
     Weekend: bool
     Administrative: int
-    Administrative_Duration: float  # Ensure these duration tracking variables exist
+    Administrative_Duration: float  
     Informational: int
-    Informational_Duration: float   # Ensure these duration tracking variables exist
+    Informational_Duration: float   
     ProductRelated: int
     ProductRelated_Duration: float
     BounceRates: float
     ExitRates: float
     PageValues: float
-    SpecialDay: float               # Ensure this traffic-weight variable exists
+    SpecialDay: float               
 
 # --- BACKGROUND WORKER TASK ---
 def log_to_bigquery(row_data: dict):
@@ -49,10 +65,8 @@ def log_to_bigquery(row_data: dict):
     This runs asynchronously AFTER the user has already received their response.
     """
     try:
-        # insert_rows_json expects a list of dictionaries (rows)
         errors = bq_client.insert_rows_json(TABLE_REF, [row_data])
         if errors:
-            # We log to stdout/stderr so Cloud Logging captures it without crashing the app
             print(f"BigQuery Ingestion Errors: {errors}")
     except Exception as e:
         print(f"Failed to stream telemetry log to BigQuery: {str(e)}")
@@ -62,8 +76,6 @@ def log_to_bigquery(row_data: dict):
 async def predict_intent(data: CustomerJourneyInput, background_tasks: BackgroundTasks):
     
     # --- DATA TRANSLATION LAYER ---
-    # The frontend sends English strings, but the UCI dataset trained the 
-    # model on anonymized integers. We intercept and translate them here.
     browser_map = {"Chrome": 2, "Safari": 1, "Firefox": 3, "Edge": 4}
     os_map = {"Windows": 1, "Mac": 2, "Linux": 3, "iOS": 4, "Android": 8}
     region_map = {"Europe": 1, "North America": 2, "Asia": 3, "South America": 4}
@@ -71,7 +83,7 @@ async def predict_intent(data: CustomerJourneyInput, background_tasks: Backgroun
     input_data = {
         "VisitorType": data.VisitorType,
         "TrafficType": data.TrafficType,
-        "Browser": browser_map.get(data.Browser, 2),  # Default to 2 if unknown
+        "Browser": browser_map.get(data.Browser, 2),  
         "OperatingSystems": os_map.get(data.OperatingSystems, 1),
         "Region": region_map.get(data.Region, 1),
         "Month": data.Month,
@@ -92,15 +104,12 @@ async def predict_intent(data: CustomerJourneyInput, background_tasks: Backgroun
     
     # --- DYNAMIC ROUTING MATRIX ---
     if data.ProductRelated == 0:
-        # We explicitly slice only the 7 top-of-funnel features the Greeter was trained on
-        # to prevent a Scikit-Learn Schema Mismatch crash.
         greeter_features = ['VisitorType', 'TrafficType', 'Browser', 'OperatingSystems', 'Region', 'Month', 'Weekend']
         greeter_df = input_df[greeter_features]
         
         raw_probability = float(greeter_model.predict_proba(greeter_df)[0][1])
         engine_tag = "Greeter Engine"
     else:
-        # The Closer Engine expects the full 17-feature dataframe
         raw_probability = float(closer_model.predict_proba(input_df)[0][1])
         engine_tag = "Closer Engine"
         
@@ -111,7 +120,7 @@ async def predict_intent(data: CustomerJourneyInput, background_tasks: Backgroun
     telemetry_log = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "visitor_type": data.VisitorType,
-        "browser": data.Browser, # We log the actual string for business readability
+        "browser": data.Browser, 
         "operating_system": data.OperatingSystems,
         "product_related_pages": data.ProductRelated,
         "page_values": data.PageValues,

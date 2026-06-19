@@ -8,4 +8,5 @@ uvicorn
 pydantic
 category_encoders
 google-cloud-bigquery>=3.0.0
+google-cloud-storage==2.13.0
 db-dtypes
