@@ -15,3 +15,6 @@ data/
 notebooks/*_files/
 *.save
 *.swp
+
+# Ignore heavy Machine Learning models (stored in GCS instead)
+models/*.joblib
