@@ -3,10 +3,23 @@ import joblib
 import pandas as pd
 from datetime import datetime, timezone
 from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi.middleware.cors import CORSMiddleware # <-- NEW IMPORT
 from pydantic import BaseModel
-from google.cloud import bigquery, storage  # <-- Added storage import
+from google.cloud import bigquery, storage
 
 app = FastAPI(title="Realtime Ecommerce Intent Engine")
+
+# --- CORS (Cross-Origin Ressource Sharing) ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # In production, you would put your exact Shopify URL here
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+# ---------------------------
+
+# ... the rest of your GCP config and app.py code stays exactly the same ...
 
 # --- GOOGLE CLOUD CONFIGURATION ---
 # These will be read from environment variables in your Cloud Run setup
