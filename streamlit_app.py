@@ -1,8 +1,12 @@
-import streamlit as st
+import os
 import requests
+import streamlit as st
 
-# --- CONFIGURATION ---
-API_URL = "https://conversion-api-service-347039794179.europe-west1.run.app/predict"
+# Environment variable with fallback to Cloud Run
+API_URL = os.getenv(
+    "API_URL", 
+    "https://conversion-api-service-347039794179.europe-west1.run.app/predict"
+)
 
 st.set_page_config(page_title="Realtime Ecommerce Intent Engine", page_icon="⚡")
 st.title("⚡ Realtime Ecommerce Intent Engine")

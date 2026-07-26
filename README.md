@@ -1,8 +1,8 @@
-# ⚡ Realtime Ecommerce Intent Engine
+# Realtime Ecommerce Intent Engine
 
 A high-performance, context-aware machine learning microservice built to optimize real-time e-commerce conversion pipelines. This service intercepts live web traffic telemetry via Google Tag Manager (GTM), analyzes the behavioral context of the customer journey, and dynamically routes payloads to specialized machine learning engines to predict purchase intent in milliseconds.
 
-## 🏗️ The 5-Pillar Architecture
+## The 5-Pillar Architecture
 
 The infrastructure is designed as a decoupled, serverless ecosystem built for infinite scale and zero idle-cost compute:
 
@@ -14,24 +14,31 @@ The infrastructure is designed as a decoupled, serverless ecosystem built for in
 
 ---
 
-## 🔀 Dynamic Routing Matrix
+## Dynamic Routing Matrix
 
 To maximize performance across different stages of the online customer journey, the API executes a custom routing matrix across two pre-trained `.joblib` pipelines:
 
 * **The Greeter Engine (Top of Funnel):** Activates at "Millisecond Zero" when a user first lands on the site (0 product page views). It relies exclusively on day-one categorical data using pre-fitted Target Encoders with Bayesian smoothing to predict baseline conversion propensity.
 * **The Closer Engine (Bottom of Funnel):** Automatically takes over the moment a user views a single product page. It evaluates deep session engagement metrics (Page Values, Exit Rates, durations) using a heavily optimized LightGBM classifier.
 
-> 📊 **Business Logic Optimization:** Rather than relying on standard, unoptimized default decision boundaries (50%), this engine applies a strict, hardcoded threshold of **70%**—discovered via a 200-trial Bayesian optimization sweep—maximizing the F1-Score to shield businesses from wasting marketing spend on false positives.
+> **Business Logic Optimization:** Rather than relying on standard, unoptimized default decision boundaries (50%), this engine applies a strict, hardcoded threshold of **os.getenv("OPTIMAL_THRESHOLD", "0.6010")**—discovered via a 200-trial Bayesian optimization sweep—maximizing the F1-Score to shield businesses from wasting marketing spend on false positives.
 
 ---
 
-## 🗂️ Repository Structure
+## Repository Structure
 
 ```text
-├── .github/workflows/    # CI/CD automated deployment pipelines
+├── .github/
+	├── workflows/
+		├── deploy.yml    # CI/CD automated deployment pipelines
+	├── dependabot.yml
 ├── models/               # Serialized mathematical brains (.joblib)
+	├── conversion_engine_v1.joblib
+	├── greeter_engine_v1.joblib
 ├── notebooks/            # Phase 1: EDA, Optimization & Feature Engineering
 │   ├── utils/            # Custom visualization and statistical evaluation scripts
+		├── marketing_eda.py
+		├── marketing_evaluation.py
 │   ├── 01_exploratory.ipynb
 │   ├── 02_model_training.ipynb
 │   └── 03_cold_start_model.ipynb
@@ -39,15 +46,22 @@ To maximize performance across different stages of the online customer journey, 
 │   ├── app.py            # FastAPI Application & Background Routing
 │   ├── marketing_pipeline.py    # Target Encoding & Data Translation Layer
 │   └── production_audit.py      # Standalone BigQuery ROI & Drift Validator
+├── .dockerignore
+├── .gitattributes
+├── .gitignore
+├── DEPLOYMENT.md
 ├── Dockerfile            # Containerization recipe for Google Cloud Run
 ├── GTM_INTEGRATION.md    # Frontend client onboarding documentation
-├── requirements.txt      # Production backend dependencies
+├── README.md
 └── requirements-dev.txt  # Local data science lab packages
+└── requirements-ui.txt  
+├── requirements.txt      # Production backend dependencies
+└── streamlit_app.py  
 ```
 
 ---
 
-## 🚀 Execution & Deployment
+## Execution & Deployment
 
 ### 1. Enterprise Docker Deployment
 To package the API into an isolated, production-ready container image:
@@ -72,7 +86,7 @@ To integrate a new e-commerce storefront with this engine, please refer directly
 
 ---
 
-## 📥 API Schema & Production Payload Example
+## API Schema & Production Payload Example
 
 The `/predict` endpoint expects a unified JSON payload. Behavioral tracking elements default to `0` or `0.0` to minimize initial payload size at early user landing phases.
 
