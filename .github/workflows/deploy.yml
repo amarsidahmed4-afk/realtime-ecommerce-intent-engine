@@ -3,11 +3,15 @@ name: Continuous Deployment to Cloud Run
 on:
   push:
     branches:
-      - main  # Trigger automation automatically whenever you push code to main
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   GCP_PROJECT_ID: gtm-m4299zzd-nti4m
-  GCP_REGION: europe-west1               # Safe, low-latency deployment region
+  GCP_REGION: europe-west1
   ARTIFACT_REGISTRY_REPO: intent-engine-repo
   SERVICE_NAME: realtime-ecommerce-intent-engine
 
@@ -15,17 +19,14 @@ jobs:
   deploy-to-cloud-run:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Securely pull your latest code repository down into the GitHub Actions runner
       - name: Checkout Source Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Step 2: Authenticate with Google Cloud securely via Service Account Credentials
       - name: Authenticate with Google Cloud
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      # Step 3: Configure your local runner's terminal to authorize Docker pushes to GCP
       - name: Set up Cloud SDK & Docker Authorization
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
 
@@ -33,17 +34,21 @@ jobs:
         run: |
           gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
 
-      # Step 4: Build your production Docker container using GitHub's hardware infrastructure
-      - name: Build and Tag Docker Image
-        run: |
-          docker build -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+      # Enable Docker Buildx for GHA Caching
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      # Step 5: Push the compiled image into your secure Google Artifact Registry repository
-      - name: Push Image to Google Artifact Registry
-        run: |
-          docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+      - name: Build and Push Docker Image (with Caching)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+            ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.SERVICE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      # Step 6: Trigger Google Cloud Run to roll out the new code with your exact warm-container spec!
       - name: Deploy to Google Cloud Run
         uses: google-github-actions/deploy-cloudrun@2028e2d7d30a78c6910e0632e48dd561b064884d # v3.0.1
         with:
@@ -54,6 +59,6 @@ jobs:
             --min-instances=1
             --allow-unauthenticated
           env_vars: |
-            GCP_PROJECT_ID=gtm-m4299zzd-nti4m
+            GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }}
             BQ_DATASET_ID=ml_logs
             BQ_TABLE_ID=intent_predictions_log
