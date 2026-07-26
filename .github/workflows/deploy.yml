@@ -17,11 +17,11 @@ jobs:
     steps:
       # Step 1: Securely pull your latest code repository down into the GitHub Actions runner
       - name: Checkout Source Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@1e31de5234b9f8995739874a8ce0492dc87873e2 # v4.0.0
 
       # Step 2: Authenticate with Google Cloud securely via Service Account Credentials
       - name: Authenticate with Google Cloud
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@67e9c72af6e0492df856527b474995862b7b6591 # v2.0.0
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
