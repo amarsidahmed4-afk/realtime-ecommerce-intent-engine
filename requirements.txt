@@ -1,3 +1,4 @@
+ucimlrepo
 numpy
 pandas
 scikit-learn

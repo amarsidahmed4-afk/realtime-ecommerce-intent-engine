@@ -4,19 +4,17 @@ from google.cloud import bigquery
 from sklearn.metrics import precision_score, recall_score, f1_score
 
 def evaluate_production_roi():
-    """
-    Queries the live BigQuery intent_predictions_log and joins it against 
-    mock client conversion data to audit real-world model drift and financial ROI.
-    """
-    # Initialize the BigQuery Client
+    """Queries live BigQuery intent logs and audits real-world drift and ROI."""
     project_id = os.getenv("GCP_PROJECT_ID", "gtm-m4299zzd-nti4m")
+    dataset_id = os.getenv("BQ_DATASET_ID", "ml_logs")
+    table_id = os.getenv("BQ_TABLE_ID", "intent_predictions_log")
+    
+    table_ref = f"`{project_id}.{dataset_id}.{table_id}`"
     client = bigquery.Client(project=project_id)
     
-    print(f"🔍 Initializing Production ROI Audit for Project: {project_id}...\n")
+    print(f"🔍 Initializing Production ROI Audit for Table: {table_ref}...\n")
 
-    # The ROI Audit Query
-    # In production, 'client_checkout_ledger' is swapped for the client's Stripe/GA4 table.
-    query = """
+    query = f"""
         WITH engine_logs AS (
             SELECT 
                 timestamp,
@@ -24,12 +22,11 @@ def evaluate_production_roi():
                 conversion_probability,
                 high_intent_flag,
                 engine_used
-            FROM `gtm-m4299zzd-nti4m.ml_logs.intent_predictions_log`
+            FROM {table_ref}
             WHERE timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
         ),
         
         mock_client_checkouts AS (
-            -- Simulating actual conversions for testing purposes
             SELECT 
                 timestamp,
                 TRUE as actual_conversion
@@ -48,14 +45,11 @@ def evaluate_production_roi():
     """
 
     try:
-        # Load results directly into a Pandas DataFrame
         df = client.query(query).to_dataframe()
-        
         if df.empty:
             print("⚠️ No prediction logs found for the last 30 days.")
             return
 
-        # Calculate Real-World Drift Metrics
         y_pred = df['predicted_conversion']
         y_true = df['actual_conversion']
         
@@ -63,7 +57,6 @@ def evaluate_production_roi():
         current_recall = recall_score(y_true, y_pred, zero_division=0)
         current_f1 = f1_score(y_true, y_pred, zero_division=0)
 
-        # Generate the Consulting Report
         print("="*50)
         print(" 📊 30-DAY ENGINE PERFORMANCE & ROI AUDIT ")
         print("="*50)
@@ -73,12 +66,10 @@ def evaluate_production_roi():
         print(f"Engine F1-Score         : {current_f1:.2f}")
         print("="*50)
 
-        # Alerting Logic
         if current_precision < 0.70:
-            print("🚨 ALERT: Model precision has drifted below the 70% profitable threshold!")
-            print("Action Required: Trigger hyperparameter retrain pipeline.")
+            print("🚨 ALERT: Precision below 70%! Trigger retraining pipeline.")
         else:
-            print("✅ Status: Engine is operating within optimal profit margins.")
+            print("✅ Status: Engine operating within optimal profit margins.")
 
     except Exception as e:
         print(f"❌ Error executing BigQuery audit: {e}")

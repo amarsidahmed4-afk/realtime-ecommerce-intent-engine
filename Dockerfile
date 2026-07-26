@@ -1,34 +1,37 @@
-# 1. Use an explicit, lightweight base image to speed up cold-start provisioning
+# 1. Base Image
 FROM python:3.11-slim
 
-# 2. Set system environment variables to optimize Python performance inside the container
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PORT=8080
+# 2. Performance Environment Variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=8080
 
-# 3. Establish the working directory inside the container isolation layer
 WORKDIR /app
 
-# 4. Install system dependencies required for minimal C-extensions (like LightGBM)
+# 3. System Dependencies (libgomp1 is required for LightGBM C++ execution)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# 5. Leverage Docker build caching by copying and installing requirements first
+# 4. Dependency Layer (Leverages Docker Caching)
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
-# 6. Copy the core source code and serialized model assets into the container image
+# 5. Copy Application Source Code
 COPY src/ ./src/
-COPY models/ ./models/
 
-# 7. Expose the standard Cloud Run port container interface
-EXPOSE 8080
+# Create models directory for runtime GCS downloads
+RUN mkdir -p models /tmp
 
-# 8. Launch Uvicorn bound to the dynamic Cloud Run environment port
-# Create a non-privileged user
-RUN adduser --disabled-password --gecos "" appuser
+# 6. Create Non-Privileged User for Security
+RUN adduser --disabled-password --gecos "" appuser \
+    && chown -R appuser:appuser /app /tmp
+
 USER appuser
 
-CMD uvicorn src.app:app --host 0.0.0.0 --port ${PORT}
+EXPOSE 8080
+
+# 7. Start Uvicorn Server
+CMD ["sh", "-c", "uvicorn src.app:app --host 0.0.0.0 --port ${PORT}"]
