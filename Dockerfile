@@ -27,4 +27,8 @@ COPY models/ ./models/
 EXPOSE 8080
 
 # 8. Launch Uvicorn bound to the dynamic Cloud Run environment port
+# Create a non-privileged user
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
+
 CMD uvicorn src.app:app --host 0.0.0.0 --port ${PORT}
