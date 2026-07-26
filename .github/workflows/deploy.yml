@@ -27,7 +27,7 @@ jobs:
 
       # Step 3: Configure your local runner's terminal to authorize Docker pushes to GCP
       - name: Set up Cloud SDK & Docker Authorization
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@825196879a077b7efa50db2e88409f44de4635c2 # v2.0.0
 
       - name: Authorize Docker for Artifact Registry
         run: |
@@ -45,7 +45,7 @@ jobs:
 
       # Step 6: Trigger Google Cloud Run to roll out the new code with your exact warm-container spec!
       - name: Deploy to Google Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
+        uses: google-github-actions/deploy-cloudrun@82a0d44f48151e2d393811779576ec6ad902146b # v2.0.0
         with:
           service: ${{ env.SERVICE_NAME }}
           region: ${{ env.GCP_REGION }}
