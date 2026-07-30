@@ -1,3 +1,17 @@
+> 🚨 **DEPRECATED / SUPERSEDED (v1.0)**
+>
+> This repository (`realtime-ecommerce-intent-engine`) is legacy and no longer actively maintained.
+>
+> **Please use the active, enterprise-grade replacement:**  
+> ⚡ [**causal-ecommerce-uplift-engine (v2.0)**](https://github.com/amarsidahmed4-afk/causal-ecommerce-uplift-engine)
+>
+> **What's new in v2.0?**
+> * **Causal Inference vs. Propensity:** Replaces raw intent prediction with CATE uplift modeling ($\tau(X)$) to target only persuadable buyers.
+> * **EMV Profit Gate:** Triggers incentives only when Expected Monetary Value ($) is positive, protecting gross margins from discount cannibalization.
+> * **Dual-Mode Telemetry:** Native support for both Client-Side and Server-Side GTM tracking (100% ad-blocker immunity).
+
+---
+
 # Realtime Ecommerce Intent Engine
 
 A high-performance, context-aware machine learning microservice built to optimize real-time e-commerce conversion pipelines. This service intercepts live web traffic telemetry via Google Tag Manager (GTM), analyzes the behavioral context of the customer journey, and dynamically routes payloads to specialized machine learning engines to predict purchase intent in milliseconds.
